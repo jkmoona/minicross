@@ -52,7 +52,7 @@ export function encodePuzzle(grid, acrossStarts, downStarts, clues) {
 export function decodePuzzle(hash) {
   const raw = fromBase64Url(hash)
   const [gridStr, acrossTexts, downTexts] = JSON.parse(raw)
-  if (typeof gridStr !== 'string' || gridStr.length !== 25) {
+  if (typeof gridStr !== 'string' || gridStr.length !== 25 || !/^[A-Z._]{25}$/.test(gridStr)) {
     throw new Error('invalid puzzle data')
   }
 

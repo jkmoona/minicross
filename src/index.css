@@ -29,8 +29,8 @@
     --dim: #908D94;
     --accent: #E06050;
     --accent-fg: #FFFFFF;
-    --sel: #FFD5CC;
-    --hl: #FFE4DC;
+    --sel: #FFC4B8;
+    --hl: #FFD9D0;
     --blk: #1E1C22;
     --glow: rgba(0, 0, 0, 0.03);
     --correct: #16a34a;
@@ -165,4 +165,14 @@ textarea.clue-input::-webkit-scrollbar {
 }
 .completion-pop {
   animation: pop 0.35s ease;
+}
+
+/* On-screen keyboard */
+.kbd-key {
+  transition: filter 0.08s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.kbd-key:active {
+  filter: brightness(1.3);
 }

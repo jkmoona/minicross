@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
 import Grid from './Grid'
+import Keyboard from './Keyboard'
 import { encodePuzzle, numberGrid } from './encoding'
 import { QRCodeSVG } from 'qrcode.react'
 
@@ -41,6 +42,7 @@ export default function Create() {
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
   const [errorKey, setErrorKey] = useState(0)
+  const [confirmClear, setConfirmClear] = useState(false)
   const inputRef = useRef(null)
 
   const { numbers, acrossStarts, downStarts } = useMemo(
@@ -203,6 +205,56 @@ export default function Create() {
     }
   }
 
+  function typeLetter(letter) {
+    if (mode !== 'letters' || !selected) return
+    const [r, c] = selected
+    if (grid[r][c].black) return
+    setGrid((prev) => {
+      const next = prev.map((row) => row.map((cell) => ({ ...cell })))
+      next[r][c].letter = letter
+      return next
+    })
+    advanceSel(r, c)
+  }
+
+  function doBackspace() {
+    if (mode !== 'letters' || !selected) return
+    const [r, c] = selected
+    if (grid[r][c].letter) {
+      setGrid((prev) => {
+        const next = prev.map((row) => row.map((cell) => ({ ...cell })))
+        next[r][c].letter = ''
+        return next
+      })
+    } else {
+      if (direction === 'across') {
+        for (let nc = c - 1; nc >= 0; nc--) {
+          if (!grid[r][nc].black) {
+            setSelected([r, nc])
+            setGrid((prev) => {
+              const next = prev.map((row) => row.map((cell) => ({ ...cell })))
+              next[r][nc].letter = ''
+              return next
+            })
+            break
+          }
+        }
+      } else {
+        for (let nr = r - 1; nr >= 0; nr--) {
+          if (!grid[nr][c].black) {
+            setSelected([nr, c])
+            setGrid((prev) => {
+              const next = prev.map((row) => row.map((cell) => ({ ...cell })))
+              next[nr][c].letter = ''
+              return next
+            })
+            break
+          }
+        }
+      }
+    }
+  }
+
   function handleInput(e) {
     const val = e.target.value
     e.target.value = ''
@@ -267,7 +319,12 @@ export default function Create() {
 
   function handleClear() {
     const hasContent = grid.some(row => row.some(cell => cell.black || cell.letter))
-    if (hasContent && !confirm('Clear the entire grid and all clues?')) return
+    if (hasContent && !confirmClear) {
+      setConfirmClear(true)
+      setTimeout(() => setConfirmClear(false), 3000)
+      return
+    }
+    setConfirmClear(false)
     setGrid(emptyGrid())
     setClues({ across: {}, down: {} })
     setSelected(null)
@@ -282,7 +339,10 @@ export default function Create() {
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
       },
-      () => {}
+      () => {
+        setCopied('fallback')
+        setTimeout(() => setCopied(false), 3000)
+      }
     )
   }
 
@@ -382,6 +442,18 @@ export default function Create() {
         )}
       </div>
 
+      {mode === 'letters' && selected && (
+        <div className="mb-5">
+          <Keyboard onKey={typeLetter} onBackspace={doBackspace} />
+        </div>
+      )}
+
+      {!grid.some(row => row.some(cell => cell.black || cell.letter)) && (
+        <p className="text-xs font-light mb-5" style={{ color: 'var(--dim)' }}>
+          {mode === 'blocks' ? 'tap cells to place blocks' : 'tap a cell and type'}
+        </p>
+      )}
+
       <div className="w-full max-w-[380px] grid grid-cols-2 gap-6 mb-7 min-w-0">
         {['across', 'down'].map((dir) => {
           const starts = dir === 'across' ? acrossStarts : downStarts
@@ -468,9 +540,9 @@ export default function Create() {
         <button
           onClick={handleClear}
           className="btn-ghost w-full py-2.5 text-[13px] font-medium"
-          style={{ color: 'var(--dim)', background: 'none', border: 'none' }}
+          style={{ color: confirmClear ? 'var(--accent)' : 'var(--dim)', background: 'none', border: 'none' }}
         >
-          clear grid
+          {confirmClear ? 'tap again to clear' : 'clear grid'}
         </button>
       </div>
 
@@ -507,7 +579,7 @@ export default function Create() {
                 color: 'var(--accent-fg)',
               }}
             >
-              {copied ? 'copied!' : 'copy link'}
+              {copied === true ? 'copied!' : copied === 'fallback' ? 'long-press link to copy' : 'copy link'}
             </button>
             <button
               onClick={() => {

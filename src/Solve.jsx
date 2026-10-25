@@ -1,25 +1,38 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import Grid from './Grid'
+import Keyboard from './Keyboard'
 
 export default function Solve({ puzzle }) {
   const { grid: solution, numbers, acrossClues, downClues, acrossStarts, downStarts } =
     puzzle
 
-  const solveKey = 'minicross-' + location.hash.slice(1, 33)
+  const solveKey = 'minicross-' + location.hash.slice(1)
+
+  function freshGrid() {
+    return solution.map((row) =>
+      row.map((cell) => ({ black: cell.black, letter: '' }))
+    )
+  }
 
   const [userGrid, setUserGrid] = useState(() => {
     try {
       const saved = localStorage.getItem(solveKey)
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length === 5) return parsed
+        if (Array.isArray(parsed) && parsed.length === 5 &&
+            parsed.every((row, r) => Array.isArray(row) && row.length === 5 &&
+              row.every((cell, c) => cell.black === solution[r][c].black)))
+          return parsed
       }
     } catch {}
-    return solution.map((row) =>
-      row.map((cell) => ({ black: cell.black, letter: '' }))
-    )
+    return freshGrid()
   })
-  const [selected, setSelected] = useState(null)
+  const [selected, setSelected] = useState(() => {
+    for (let r = 0; r < 5; r++)
+      for (let c = 0; c < 5; c++)
+        if (!solution[r][c].black) return [r, c]
+    return null
+  })
   const [direction, setDirection] = useState('across')
   const [revealed, setRevealed] = useState(false)
   const inputRef = useRef(null)
@@ -198,6 +211,56 @@ export default function Solve({ puzzle }) {
     }
   }
 
+  function typeLetter(letter) {
+    if (!selected || revealed) return
+    const [r, c] = selected
+    if (solution[r][c].black) return
+    setUserGrid((prev) => {
+      const next = prev.map((row) => row.map((cell) => ({ ...cell })))
+      next[r][c].letter = letter
+      return next
+    })
+    advanceSel(r, c)
+  }
+
+  function doBackspace() {
+    if (!selected || revealed) return
+    const [r, c] = selected
+    if (userGrid[r][c].letter) {
+      setUserGrid((prev) => {
+        const next = prev.map((row) => row.map((cell) => ({ ...cell })))
+        next[r][c].letter = ''
+        return next
+      })
+    } else {
+      if (direction === 'across') {
+        for (let nc = c - 1; nc >= 0; nc--) {
+          if (!solution[r][nc].black) {
+            setSelected([r, nc])
+            setUserGrid((prev) => {
+              const next = prev.map((row) => row.map((cell) => ({ ...cell })))
+              next[r][nc].letter = ''
+              return next
+            })
+            break
+          }
+        }
+      } else {
+        for (let nr = r - 1; nr >= 0; nr--) {
+          if (!solution[nr][c].black) {
+            setSelected([nr, c])
+            setUserGrid((prev) => {
+              const next = prev.map((row) => row.map((cell) => ({ ...cell })))
+              next[nr][c].letter = ''
+              return next
+            })
+            break
+          }
+        }
+      }
+    }
+  }
+
   function handleInput(e) {
     const val = e.target.value
     e.target.value = ''
@@ -227,11 +290,7 @@ export default function Solve({ puzzle }) {
   }
 
   function handleReset() {
-    setUserGrid(
-      solution.map((row) =>
-        row.map((cell) => ({ black: cell.black, letter: '' }))
-      )
-    )
+    setUserGrid(freshGrid())
     setSelected(null)
     setRevealed(false)
     try { localStorage.removeItem(solveKey) } catch {}
@@ -298,6 +357,12 @@ export default function Solve({ puzzle }) {
           />
         )}
       </div>
+
+      {!revealed && selected && (
+        <div className="mb-5">
+          <Keyboard onKey={typeLetter} onBackspace={doBackspace} />
+        </div>
+      )}
 
       <div className="w-full max-w-[380px] grid grid-cols-2 gap-6 mb-7 min-w-0">
         {[
