@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Grid from './Grid'
 import Keyboard from './Keyboard'
 import { encodePuzzle, numberGrid } from './encoding'
@@ -43,7 +43,6 @@ export default function Create() {
   const [error, setError] = useState('')
   const [errorKey, setErrorKey] = useState(0)
   const [confirmClear, setConfirmClear] = useState(false)
-  const inputRef = useRef(null)
 
   const { numbers, acrossStarts, downStarts } = useMemo(
     () => numberGrid(grid),
@@ -122,11 +121,10 @@ export default function Create() {
       if (a && !d) setDirection('across')
       else if (d && !a) setDirection('down')
     }
-    inputRef.current?.focus()
   }
 
   function handleKeyDown(e) {
-    if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.target !== inputRef.current) return
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
     if (mode !== 'letters' || !selected) return
     const [r, c] = selected
 
@@ -255,23 +253,6 @@ export default function Create() {
     }
   }
 
-  function handleInput(e) {
-    const val = e.target.value
-    e.target.value = ''
-    if (!selected) return
-    const [r, c] = selected
-    if (grid[r][c].black) return
-    const letter = val.toUpperCase().replace(/[^A-Z]/g, '').slice(-1)
-    if (letter) {
-      setGrid((prev) => {
-        const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-        next[r][c].letter = letter
-        return next
-      })
-      advanceSel(r, c)
-    }
-  }
-
   function handleClueClick(dir, num) {
     setMode('letters')
     const starts = dir === 'across' ? acrossStarts : downStarts
@@ -279,7 +260,6 @@ export default function Create() {
     if (s) {
       setSelected([s.row, s.col])
       setDirection(dir)
-      setTimeout(() => inputRef.current?.focus(), 0)
     }
   }
 
@@ -345,14 +325,6 @@ export default function Create() {
       }
     )
   }
-
-  useEffect(() => {
-    if (mode === 'letters' && selected) {
-      const active = document.activeElement
-      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && active !== inputRef.current) return
-      inputRef.current?.focus()
-    }
-  }, [mode, selected])
 
   useEffect(() => {
     saveDraft({ grid, mode, selected, direction, clues })
@@ -425,21 +397,6 @@ export default function Create() {
           highlightedCells={getHighlightedCells()}
           onCellClick={handleCellClick}
         />
-        {mode === 'letters' && (
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="text"
-            autoCapitalize="characters"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            enterKeyHint="next"
-            onInput={handleInput}
-            className="absolute top-0 left-0 opacity-[0.01] pointer-events-none"
-            style={{ width: '1px', height: '1px', fontSize: '16px' }}
-          />
-        )}
       </div>
 
       {mode === 'letters' && selected && (

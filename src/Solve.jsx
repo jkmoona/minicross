@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Grid from './Grid'
 import Keyboard from './Keyboard'
 
@@ -35,7 +35,6 @@ export default function Solve({ puzzle }) {
   })
   const [direction, setDirection] = useState('across')
   const [revealed, setRevealed] = useState(false)
-  const inputRef = useRef(null)
 
   const solved = useMemo(() => {
     return solution.every((row, r) =>
@@ -125,7 +124,6 @@ export default function Solve({ puzzle }) {
       if (a && !d) setDirection('across')
       else if (d && !a) setDirection('down')
     }
-    inputRef.current?.focus()
   }
 
   function handleKeyDown(e) {
@@ -261,23 +259,6 @@ export default function Solve({ puzzle }) {
     }
   }
 
-  function handleInput(e) {
-    const val = e.target.value
-    e.target.value = ''
-    if (!selected || revealed) return
-    const [r, c] = selected
-    if (solution[r][c].black) return
-    const letter = val.toUpperCase().replace(/[^A-Z]/g, '').slice(-1)
-    if (letter) {
-      setUserGrid((prev) => {
-        const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-        next[r][c].letter = letter
-        return next
-      })
-      advanceSel(r, c)
-    }
-  }
-
   function handleClueClick(dir, num) {
     if (revealed) return
     const starts = dir === 'across' ? acrossStarts : downStarts
@@ -285,7 +266,6 @@ export default function Solve({ puzzle }) {
     if (s) {
       setSelected([s.row, s.col])
       setDirection(dir)
-      setTimeout(() => inputRef.current?.focus(), 0)
     }
   }
 
@@ -299,10 +279,6 @@ export default function Solve({ puzzle }) {
   useEffect(() => {
     try { localStorage.setItem(solveKey, JSON.stringify(userGrid)) } catch {}
   }, [userGrid, solveKey])
-
-  useEffect(() => {
-    if (!revealed && selected) inputRef.current?.focus()
-  }, [selected, revealed])
 
   return (
     <div
@@ -341,21 +317,6 @@ export default function Solve({ puzzle }) {
           onCellClick={handleCellClick}
           showCursor={!revealed}
         />
-        {!revealed && (
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="text"
-            autoCapitalize="characters"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            enterKeyHint="next"
-            onInput={handleInput}
-            className="absolute top-0 left-0 opacity-[0.01] pointer-events-none"
-            style={{ width: '1px', height: '1px', fontSize: '16px' }}
-          />
-        )}
       </div>
 
       {!revealed && selected && (
