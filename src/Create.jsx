@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import Grid from './Grid'
 import Keyboard from './Keyboard'
 import { encodePuzzle, numberGrid } from './encoding'
@@ -43,6 +43,7 @@ export default function Create() {
   const [error, setError] = useState('')
   const [errorKey, setErrorKey] = useState(0)
   const [confirmClear, setConfirmClear] = useState(false)
+  const inputRef = useRef(null)
 
   const { numbers, acrossStarts, downStarts } = useMemo(
     () => numberGrid(grid),
@@ -110,6 +111,7 @@ export default function Create() {
       return
     }
     if (grid[r][c].black) return
+    inputRef.current?.focus()
     if (selected && selected[0] === r && selected[1] === c) {
       const a = hasAcross(r, c), d = hasDown(r, c)
       if (a && d) setDirection((prev) => (prev === 'across' ? 'down' : 'across'))
@@ -124,7 +126,7 @@ export default function Create() {
   }
 
   function handleKeyDown(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+    if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.target !== inputRef.current) return
     if (mode !== 'letters' || !selected) return
     const [r, c] = selected
 
@@ -351,6 +353,13 @@ export default function Create() {
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >
+      <input
+        ref={inputRef}
+        inputMode="none"
+        autoComplete="off"
+        style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+        aria-hidden="true"
+      />
       <h1
         className="text-xl font-semibold mb-7"
         style={{ letterSpacing: '-0.02em' }}

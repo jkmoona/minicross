@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import Grid from './Grid'
 import Keyboard from './Keyboard'
 
@@ -35,6 +35,7 @@ export default function Solve({ puzzle }) {
   })
   const [direction, setDirection] = useState('across')
   const [revealed, setRevealed] = useState(false)
+  const inputRef = useRef(null)
 
   const solved = useMemo(() => {
     return solution.every((row, r) =>
@@ -113,6 +114,7 @@ export default function Solve({ puzzle }) {
 
   function handleCellClick(r, c) {
     if (solution[r][c].black || revealed) return
+    inputRef.current?.focus()
     if (selected && selected[0] === r && selected[1] === c) {
       const a = hasAcross(r, c), d = hasDown(r, c)
       if (a && d) setDirection((prev) => (prev === 'across' ? 'down' : 'across'))
@@ -292,6 +294,13 @@ export default function Solve({ puzzle }) {
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >
+      <input
+        ref={inputRef}
+        inputMode="none"
+        autoComplete="off"
+        style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+        aria-hidden="true"
+      />
       <h1
         className="text-xl font-semibold mb-7"
         style={{ letterSpacing: '-0.02em' }}
