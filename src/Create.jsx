@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
 import Grid from './Grid'
 import Keyboard from './Keyboard'
+import Layout from './Layout'
+import useCrosswordNav from './useCrosswordNav'
 import { encodePuzzle, numberGrid } from './encoding'
 import { QRCodeSVG } from 'qrcode.react'
 
@@ -27,16 +29,12 @@ function saveDraft(data) {
 }
 
 export default function Create() {
-  const [draft] = useState(loadDraft)
+  const draftRef = useRef(undefined)
+  if (draftRef.current === undefined) draftRef.current = loadDraft()
+  const draft = draftRef.current
+
   const [grid, setGrid] = useState(() => draft?.grid ?? emptyGrid())
   const [mode, setMode] = useState(() => draft?.mode ?? 'blocks')
-  const [selected, setSelected] = useState(() => {
-    const sel = draft?.selected
-    if (!sel) return null
-    if (draft?.grid?.[sel[0]]?.[sel[1]]?.black) return null
-    return sel
-  })
-  const [direction, setDirection] = useState(() => draft?.direction ?? 'across')
   const [clues, setClues] = useState(() => draft?.clues ?? { across: {}, down: {} })
   const [shareUrl, setShareUrl] = useState(null)
   const [copied, setCopied] = useState(false)
@@ -50,227 +48,52 @@ export default function Create() {
     [grid]
   )
 
-  function getHighlightedCells() {
-    if (mode !== 'letters' || !selected) return []
-    const [r, c] = selected
-    if (grid[r][c].black) return []
-    const cells = []
-    if (direction === 'across') {
-      let sc = c
-      while (sc > 0 && !grid[r][sc - 1].black) sc--
-      for (let cc = sc; cc < 5 && !grid[r][cc].black; cc++) cells.push([r, cc])
-    } else {
-      let sr = r
-      while (sr > 0 && !grid[sr - 1][c].black) sr--
-      for (let rr = sr; rr < 5 && !grid[rr][c].black; rr++) cells.push([rr, c])
-    }
-    return cells
-  }
-
-  function getActiveClueNum(dir) {
-    if (!selected || mode === 'blocks') return null
-    const [r, c] = selected
-    if (grid[r][c].black) return null
-    if (dir === 'across') {
-      let sc = c
-      while (sc > 0 && !grid[r][sc - 1].black) sc--
-      return acrossStarts.find(s => s.row === r && s.col === sc)?.num ?? null
-    }
-    let sr = r
-    while (sr > 0 && !grid[sr - 1][c].black) sr--
-    return downStarts.find(s => s.row === sr && s.col === c)?.num ?? null
-  }
-
-  function advanceSel(r, c) {
-    if (direction === 'across') {
-      for (let nc = c + 1; nc < 5; nc++)
-        if (!grid[r][nc].black) return setSelected([r, nc])
-    } else {
-      for (let nr = r + 1; nr < 5; nr++)
-        if (!grid[nr][c].black) return setSelected([nr, c])
-    }
-  }
-
-  function hasAcross(r, c) {
-    return !grid[r][c].black &&
-      ((c > 0 && !grid[r][c - 1].black) || (c < 4 && !grid[r][c + 1].black))
-  }
-
-  function hasDown(r, c) {
-    return !grid[r][c].black &&
-      ((r > 0 && !grid[r - 1][c].black) || (r < 4 && !grid[r + 1][c].black))
-  }
+  const nav = useCrosswordNav({
+    navGrid: grid,
+    editGrid: grid,
+    setEditGrid: setGrid,
+    acrossStarts,
+    downStarts,
+    disabled: mode !== 'letters',
+    inputRef,
+    initialSelected: () => {
+      const sel = draft?.selected
+      if (!sel || draft?.grid?.[sel[0]]?.[sel[1]]?.black) return null
+      return sel
+    },
+    initialDirection: () => draft?.direction ?? 'across',
+  })
 
   function handleCellClick(r, c) {
     if (mode === 'blocks') {
-      setGrid((prev) => {
-        const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-        next[r][c] = { black: !next[r][c].black, letter: '' }
-        return next
-      })
+      setGrid(prev =>
+        prev.map((row, ri) =>
+          ri !== r ? row : row.map((cell, ci) =>
+            ci !== c ? cell : { black: !cell.black, letter: '' }
+          )
+        )
+      )
       return
     }
-    if (grid[r][c].black) return
-    inputRef.current?.focus()
-    if (selected && selected[0] === r && selected[1] === c) {
-      const a = hasAcross(r, c), d = hasDown(r, c)
-      if (a && d) setDirection((prev) => (prev === 'across' ? 'down' : 'across'))
-      else if (d) setDirection('down')
-      else setDirection('across')
-    } else {
-      setSelected([r, c])
-      const a = hasAcross(r, c), d = hasDown(r, c)
-      if (a && !d) setDirection('across')
-      else if (d && !a) setDirection('down')
-    }
-  }
-
-  function handleKeyDown(e) {
-    if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.target !== inputRef.current) return
-    if (mode !== 'letters' || !selected) return
-    const [r, c] = selected
-
-    if (e.key === 'Backspace') {
-      e.preventDefault()
-      if (grid[r][c].letter) {
-        setGrid((prev) => {
-          const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-          next[r][c].letter = ''
-          return next
-        })
-      } else {
-        if (direction === 'across') {
-          for (let nc = c - 1; nc >= 0; nc--) {
-            if (!grid[r][nc].black) {
-              setSelected([r, nc])
-              setGrid((prev) => {
-                const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-                next[r][nc].letter = ''
-                return next
-              })
-              break
-            }
-          }
-        } else {
-          for (let nr = r - 1; nr >= 0; nr--) {
-            if (!grid[nr][c].black) {
-              setSelected([nr, c])
-              setGrid((prev) => {
-                const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-                next[nr][c].letter = ''
-                return next
-              })
-              break
-            }
-          }
-        }
-      }
-      return
-    }
-
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      e.preventDefault()
-      if (direction === 'across') { setDirection('down'); return }
-      if (e.key === 'ArrowUp') {
-        for (let nr = r - 1; nr >= 0; nr--)
-          if (!grid[nr][c].black) { setSelected([nr, c]); break }
-      } else {
-        for (let nr = r + 1; nr < 5; nr++)
-          if (!grid[nr][c].black) { setSelected([nr, c]); break }
-      }
-      return
-    }
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      e.preventDefault()
-      if (direction === 'down') { setDirection('across'); return }
-      if (e.key === 'ArrowLeft') {
-        for (let nc = c - 1; nc >= 0; nc--)
-          if (!grid[r][nc].black) { setSelected([r, nc]); break }
-      } else {
-        for (let nc = c + 1; nc < 5; nc++)
-          if (!grid[r][nc].black) { setSelected([r, nc]); break }
-      }
-      return
-    }
-
-    if (/^[a-zA-Z]$/.test(e.key)) {
-      e.preventDefault()
-      const letter = e.key.toUpperCase()
-      setGrid((prev) => {
-        const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-        next[r][c].letter = letter
-        return next
-      })
-      advanceSel(r, c)
-    }
-  }
-
-  function typeLetter(letter) {
-    if (mode !== 'letters' || !selected) return
-    const [r, c] = selected
-    if (grid[r][c].black) return
-    setGrid((prev) => {
-      const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-      next[r][c].letter = letter
-      return next
-    })
-    advanceSel(r, c)
-  }
-
-  function doBackspace() {
-    if (mode !== 'letters' || !selected) return
-    const [r, c] = selected
-    if (grid[r][c].letter) {
-      setGrid((prev) => {
-        const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-        next[r][c].letter = ''
-        return next
-      })
-    } else {
-      if (direction === 'across') {
-        for (let nc = c - 1; nc >= 0; nc--) {
-          if (!grid[r][nc].black) {
-            setSelected([r, nc])
-            setGrid((prev) => {
-              const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-              next[r][nc].letter = ''
-              return next
-            })
-            break
-          }
-        }
-      } else {
-        for (let nr = r - 1; nr >= 0; nr--) {
-          if (!grid[nr][c].black) {
-            setSelected([nr, c])
-            setGrid((prev) => {
-              const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-              next[nr][c].letter = ''
-              return next
-            })
-            break
-          }
-        }
-      }
-    }
+    nav.handleCellClick(r, c)
   }
 
   function handleClueClick(dir, num) {
     setMode('letters')
     const starts = dir === 'across' ? acrossStarts : downStarts
-    const s = starts.find((x) => x.num === num)
+    const s = starts.find(x => x.num === num)
     if (s) {
-      setSelected([s.row, s.col])
-      setDirection(dir)
+      nav.setSelected([s.row, s.col])
+      nav.setDirection(dir)
     }
   }
 
   function switchToLetters() {
     setMode('letters')
-    if (!selected) {
+    if (!nav.selected) {
       for (let r = 0; r < 5; r++)
         for (let c = 0; c < 5; c++)
-          if (!grid[r][c].black) { setSelected([r, c]); return }
+          if (!grid[r][c].black) { nav.setSelected([r, c]); return }
     }
   }
 
@@ -288,8 +111,8 @@ export default function Create() {
           setErrorKey(k => k + 1)
           return
         }
-    const missingAcross = acrossStarts.some((s) => !clues.across[s.num]?.trim())
-    const missingDown = downStarts.some((s) => !clues.down[s.num]?.trim())
+    const missingAcross = acrossStarts.some(s => !clues.across[s.num]?.trim())
+    const missingDown = downStarts.some(s => !clues.down[s.num]?.trim())
     if (missingAcross || missingDown) {
       setError('fill all clues')
       setErrorKey(k => k + 1)
@@ -309,7 +132,7 @@ export default function Create() {
     setConfirmClear(false)
     setGrid(emptyGrid())
     setClues({ across: {}, down: {} })
-    setSelected(null)
+    nav.setSelected(null)
     setShareUrl(null)
     setError('')
     try { localStorage.removeItem(DRAFT_KEY) } catch {}
@@ -329,8 +152,8 @@ export default function Create() {
   }
 
   useEffect(() => {
-    saveDraft({ grid, mode, selected, direction, clues })
-  }, [grid, mode, selected, direction, clues])
+    saveDraft({ grid, mode, selected: nav.selected, direction: nav.direction, clues })
+  }, [grid, mode, nav.selected, nav.direction, clues])
 
   useEffect(() => {
     if (!shareUrl) return
@@ -342,31 +165,7 @@ export default function Create() {
   }, [shareUrl])
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center outline-none"
-      style={{
-        paddingLeft: 'max(16px, env(safe-area-inset-left, 0px))',
-        paddingRight: 'max(16px, env(safe-area-inset-right, 0px))',
-        paddingTop: '24px',
-        paddingBottom: '48px',
-      }}
-      tabIndex={-1}
-      onKeyDown={handleKeyDown}
-    >
-      <input
-        ref={inputRef}
-        inputMode="none"
-        autoComplete="off"
-        style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
-        aria-hidden="true"
-      />
-      <h1
-        className="text-xl font-semibold mb-7"
-        style={{ letterSpacing: '-0.02em' }}
-      >
-        minicross
-      </h1>
-
+    <Layout onKeyDown={nav.handleKeyDown} inputRef={inputRef}>
       <div
         className="flex gap-1 p-1 rounded-lg mb-7"
         style={{ background: 'var(--surface)' }}
@@ -380,7 +179,7 @@ export default function Create() {
           }}
           onClick={() => {
             setMode('blocks')
-            setSelected(null)
+            nav.setSelected(null)
           }}
         >
           blocks
@@ -402,15 +201,15 @@ export default function Create() {
         <Grid
           grid={grid}
           numbers={numbers}
-          selected={mode === 'letters' ? selected : null}
-          highlightedCells={getHighlightedCells()}
+          selected={mode === 'letters' ? nav.selected : null}
+          highlightedCells={nav.highlightedCells}
           onCellClick={handleCellClick}
         />
       </div>
 
-      {mode === 'letters' && selected && (
+      {mode === 'letters' && nav.selected && (
         <div className="mb-5">
-          <Keyboard onKey={typeLetter} onBackspace={doBackspace} />
+          <Keyboard onKey={nav.typeLetter} onBackspace={nav.doBackspace} />
         </div>
       )}
 
@@ -421,9 +220,9 @@ export default function Create() {
       )}
 
       <div className="w-full max-w-[380px] grid grid-cols-2 gap-6 mb-7 min-w-0">
-        {['across', 'down'].map((dir) => {
+        {['across', 'down'].map(dir => {
           const starts = dir === 'across' ? acrossStarts : downStarts
-          const activeNum = getActiveClueNum(dir)
+          const activeNum = nav.getActiveClueNum(dir)
           return (
             <div key={dir} className="min-w-0">
               <h2
@@ -440,11 +239,11 @@ export default function Create() {
                   place blocks to create words
                 </p>
               ) : (
-                starts.map((s) => (
+                starts.map(s => (
                   <div
                     key={s.num}
                     className={`clue-row flex gap-2 items-start cursor-pointer${
-                      direction === dir && activeNum === s.num ? ' clue-active' : ''
+                      nav.direction === dir && activeNum === s.num ? ' clue-active' : ''
                     }`}
                     onClick={() => handleClueClick(dir, s.num)}
                   >
@@ -461,18 +260,18 @@ export default function Create() {
                       rows={1}
                       placeholder="add clue…"
                       value={clues[dir][s.num] || ''}
-                      onChange={(e) => {
-                        setClues((prev) => ({
+                      onChange={e => {
+                        setClues(prev => ({
                           ...prev,
                           [dir]: { ...prev[dir], [s.num]: e.target.value },
                         }))
                         e.target.style.height = 'auto'
                         e.target.style.height = e.target.scrollHeight + 'px'
                       }}
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation()
-                        setSelected([s.row, s.col])
-                        setDirection(dir)
+                        nav.setSelected([s.row, s.col])
+                        nav.setDirection(dir)
                         if (mode !== 'letters') setMode('letters')
                       }}
                       className="clue-input flex-1 bg-transparent text-sm outline-none min-w-0 resize-none leading-snug"
@@ -524,7 +323,7 @@ export default function Create() {
           <div
             className="modal-content w-full max-w-sm rounded-2xl p-6 flex flex-col items-center gap-4"
             style={{ background: 'var(--surface)' }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             <h2 className="text-lg font-semibold">puzzle ready</h2>
             <div className="p-4 rounded-xl" style={{ background: '#fff' }}>
@@ -535,7 +334,7 @@ export default function Create() {
               value={shareUrl}
               className="w-full bg-transparent text-xs text-center truncate outline-none"
               style={{ color: 'var(--dim)' }}
-              onClick={(e) => e.target.select()}
+              onClick={e => e.target.select()}
             />
             <button
               onClick={handleCopy}
@@ -560,6 +359,6 @@ export default function Create() {
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   )
 }

@@ -21,11 +21,11 @@ export default function Grid({
     >
       {grid.map((row, r) =>
         row.map((cell, c) => {
-          const num = numbers?.[r]?.[c]
-          const isSel = selected?.[0] === r && selected?.[1] === c
+          const num = numbers[r][c]
+          const isSel = selected && selected[0] === r && selected[1] === c
           const isHl =
             !isSel &&
-            highlightedCells?.some(([hr, hc]) => hr === r && hc === c)
+            highlightedCells.some(([hr, hc]) => hr === r && hc === c)
 
           let bg = 'var(--cell)'
           if (cell.black) bg = 'var(--blk)'

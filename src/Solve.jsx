@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import Grid from './Grid'
 import Keyboard from './Keyboard'
+import Layout from './Layout'
+import useCrosswordNav from './useCrosswordNav'
 
 export default function Solve({ puzzle }) {
   const { grid: solution, numbers, acrossClues, downClues, acrossStarts, downStarts } =
@@ -9,8 +11,8 @@ export default function Solve({ puzzle }) {
   const solveKey = 'minicross-' + location.hash.slice(1)
 
   function freshGrid() {
-    return solution.map((row) =>
-      row.map((cell) => ({ black: cell.black, letter: '' }))
+    return solution.map(row =>
+      row.map(cell => ({ black: cell.black, letter: '' }))
     )
   }
 
@@ -27,25 +29,35 @@ export default function Solve({ puzzle }) {
     } catch {}
     return freshGrid()
   })
-  const [selected, setSelected] = useState(() => {
-    for (let r = 0; r < 5; r++)
-      for (let c = 0; c < 5; c++)
-        if (!solution[r][c].black) return [r, c]
-    return null
-  })
-  const [direction, setDirection] = useState('across')
   const [revealed, setRevealed] = useState(false)
   const inputRef = useRef(null)
 
-  const solved = useMemo(() => {
-    return solution.every((row, r) =>
+  const solved = useMemo(() =>
+    solution.every((row, r) =>
       row.every((cell, c) =>
         cell.black || userGrid[r][c].letter === cell.letter
       )
-    )
-  }, [userGrid, solution])
+    ),
+    [userGrid, solution]
+  )
 
-  function getDisplayGrid() {
+  const nav = useCrosswordNav({
+    navGrid: solution,
+    editGrid: userGrid,
+    setEditGrid: setUserGrid,
+    acrossStarts,
+    downStarts,
+    disabled: revealed,
+    inputRef,
+    initialSelected: () => {
+      for (let r = 0; r < 5; r++)
+        for (let c = 0; c < 5; c++)
+          if (!solution[r][c].black) return [r, c]
+      return null
+    },
+  })
+
+  const displayGrid = useMemo(() => {
     if (!revealed) return userGrid
     return solution.map((row, r) =>
       row.map((cell, c) => {
@@ -57,223 +69,21 @@ export default function Solve({ puzzle }) {
         }
       })
     )
-  }
-
-  function getHighlightedCells() {
-    if (!selected || revealed) return []
-    const [r, c] = selected
-    if (solution[r][c].black) return []
-    const cells = []
-    if (direction === 'across') {
-      let sc = c
-      while (sc > 0 && !solution[r][sc - 1].black) sc--
-      for (let cc = sc; cc < 5 && !solution[r][cc].black; cc++)
-        cells.push([r, cc])
-    } else {
-      let sr = r
-      while (sr > 0 && !solution[sr - 1][c].black) sr--
-      for (let rr = sr; rr < 5 && !solution[rr][c].black; rr++)
-        cells.push([rr, c])
-    }
-    return cells
-  }
-
-  function getActiveClueNum(dir) {
-    if (!selected || revealed) return null
-    const [r, c] = selected
-    if (solution[r][c].black) return null
-    if (dir === 'across') {
-      let sc = c
-      while (sc > 0 && !solution[r][sc - 1].black) sc--
-      return acrossStarts.find(s => s.row === r && s.col === sc)?.num ?? null
-    }
-    let sr = r
-    while (sr > 0 && !solution[sr - 1][c].black) sr--
-    return downStarts.find(s => s.row === sr && s.col === c)?.num ?? null
-  }
-
-  function advanceSel(r, c) {
-    if (direction === 'across') {
-      for (let nc = c + 1; nc < 5; nc++)
-        if (!solution[r][nc].black) return setSelected([r, nc])
-    } else {
-      for (let nr = r + 1; nr < 5; nr++)
-        if (!solution[nr][c].black) return setSelected([nr, c])
-    }
-  }
-
-  function hasAcross(r, c) {
-    return !solution[r][c].black &&
-      ((c > 0 && !solution[r][c - 1].black) || (c < 4 && !solution[r][c + 1].black))
-  }
-
-  function hasDown(r, c) {
-    return !solution[r][c].black &&
-      ((r > 0 && !solution[r - 1][c].black) || (r < 4 && !solution[r + 1][c].black))
-  }
-
-  function handleCellClick(r, c) {
-    if (solution[r][c].black || revealed) return
-    inputRef.current?.focus()
-    if (selected && selected[0] === r && selected[1] === c) {
-      const a = hasAcross(r, c), d = hasDown(r, c)
-      if (a && d) setDirection((prev) => (prev === 'across' ? 'down' : 'across'))
-      else if (d) setDirection('down')
-      else setDirection('across')
-    } else {
-      setSelected([r, c])
-      const a = hasAcross(r, c), d = hasDown(r, c)
-      if (a && !d) setDirection('across')
-      else if (d && !a) setDirection('down')
-    }
-  }
-
-  function handleKeyDown(e) {
-    if (!selected || revealed) return
-    const [r, c] = selected
-
-    if (e.key === 'Backspace') {
-      e.preventDefault()
-      if (userGrid[r][c].letter) {
-        setUserGrid((prev) => {
-          const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-          next[r][c].letter = ''
-          return next
-        })
-      } else {
-        if (direction === 'across') {
-          for (let nc = c - 1; nc >= 0; nc--) {
-            if (!solution[r][nc].black) {
-              setSelected([r, nc])
-              setUserGrid((prev) => {
-                const next = prev.map((row) =>
-                  row.map((cell) => ({ ...cell }))
-                )
-                next[r][nc].letter = ''
-                return next
-              })
-              break
-            }
-          }
-        } else {
-          for (let nr = r - 1; nr >= 0; nr--) {
-            if (!solution[nr][c].black) {
-              setSelected([nr, c])
-              setUserGrid((prev) => {
-                const next = prev.map((row) =>
-                  row.map((cell) => ({ ...cell }))
-                )
-                next[nr][c].letter = ''
-                return next
-              })
-              break
-            }
-          }
-        }
-      }
-      return
-    }
-
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      e.preventDefault()
-      if (direction === 'across') { setDirection('down'); return }
-      if (e.key === 'ArrowUp') {
-        for (let nr = r - 1; nr >= 0; nr--)
-          if (!solution[nr][c].black) { setSelected([nr, c]); break }
-      } else {
-        for (let nr = r + 1; nr < 5; nr++)
-          if (!solution[nr][c].black) { setSelected([nr, c]); break }
-      }
-      return
-    }
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      e.preventDefault()
-      if (direction === 'down') { setDirection('across'); return }
-      if (e.key === 'ArrowLeft') {
-        for (let nc = c - 1; nc >= 0; nc--)
-          if (!solution[r][nc].black) { setSelected([r, nc]); break }
-      } else {
-        for (let nc = c + 1; nc < 5; nc++)
-          if (!solution[r][nc].black) { setSelected([r, nc]); break }
-      }
-      return
-    }
-
-    if (/^[a-zA-Z]$/.test(e.key)) {
-      e.preventDefault()
-      const letter = e.key.toUpperCase()
-      setUserGrid((prev) => {
-        const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-        next[r][c].letter = letter
-        return next
-      })
-      advanceSel(r, c)
-    }
-  }
-
-  function typeLetter(letter) {
-    if (!selected || revealed) return
-    const [r, c] = selected
-    if (solution[r][c].black) return
-    setUserGrid((prev) => {
-      const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-      next[r][c].letter = letter
-      return next
-    })
-    advanceSel(r, c)
-  }
-
-  function doBackspace() {
-    if (!selected || revealed) return
-    const [r, c] = selected
-    if (userGrid[r][c].letter) {
-      setUserGrid((prev) => {
-        const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-        next[r][c].letter = ''
-        return next
-      })
-    } else {
-      if (direction === 'across') {
-        for (let nc = c - 1; nc >= 0; nc--) {
-          if (!solution[r][nc].black) {
-            setSelected([r, nc])
-            setUserGrid((prev) => {
-              const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-              next[r][nc].letter = ''
-              return next
-            })
-            break
-          }
-        }
-      } else {
-        for (let nr = r - 1; nr >= 0; nr--) {
-          if (!solution[nr][c].black) {
-            setSelected([nr, c])
-            setUserGrid((prev) => {
-              const next = prev.map((row) => row.map((cell) => ({ ...cell })))
-              next[nr][c].letter = ''
-              return next
-            })
-            break
-          }
-        }
-      }
-    }
-  }
+  }, [revealed, userGrid, solution])
 
   function handleClueClick(dir, num) {
     if (revealed) return
     const starts = dir === 'across' ? acrossStarts : downStarts
-    const s = starts.find((x) => x.num === num)
+    const s = starts.find(x => x.num === num)
     if (s) {
-      setSelected([s.row, s.col])
-      setDirection(dir)
+      nav.setSelected([s.row, s.col])
+      nav.setDirection(dir)
     }
   }
 
   function handleReset() {
     setUserGrid(freshGrid())
-    setSelected(null)
+    nav.setSelected(null)
     setRevealed(false)
     try { localStorage.removeItem(solveKey) } catch {}
   }
@@ -283,31 +93,7 @@ export default function Solve({ puzzle }) {
   }, [userGrid, solveKey])
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center outline-none"
-      style={{
-        paddingLeft: 'max(16px, env(safe-area-inset-left, 0px))',
-        paddingRight: 'max(16px, env(safe-area-inset-right, 0px))',
-        paddingTop: '24px',
-        paddingBottom: '48px',
-      }}
-      tabIndex={-1}
-      onKeyDown={handleKeyDown}
-    >
-      <input
-        ref={inputRef}
-        inputMode="none"
-        autoComplete="off"
-        style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
-        aria-hidden="true"
-      />
-      <h1
-        className="text-xl font-semibold mb-7"
-        style={{ letterSpacing: '-0.02em' }}
-      >
-        minicross
-      </h1>
-
+    <Layout onKeyDown={nav.handleKeyDown} inputRef={inputRef}>
       {solved && !revealed && (
         <div
           className="completion-pop w-full max-w-[380px] text-center py-3 rounded-xl mb-4 text-[15px] font-semibold"
@@ -319,18 +105,18 @@ export default function Solve({ puzzle }) {
 
       <div className="relative mb-7">
         <Grid
-          grid={getDisplayGrid()}
+          grid={displayGrid}
           numbers={numbers}
-          selected={!revealed ? selected : null}
-          highlightedCells={getHighlightedCells()}
-          onCellClick={handleCellClick}
+          selected={!revealed ? nav.selected : null}
+          highlightedCells={nav.highlightedCells}
+          onCellClick={nav.handleCellClick}
           showCursor={!revealed}
         />
       </div>
 
-      {!revealed && selected && (
+      {!revealed && nav.selected && (
         <div className="mb-5">
-          <Keyboard onKey={typeLetter} onBackspace={doBackspace} />
+          <Keyboard onKey={nav.typeLetter} onBackspace={nav.doBackspace} />
         </div>
       )}
 
@@ -339,7 +125,7 @@ export default function Solve({ puzzle }) {
           { dir: 'across', items: acrossClues },
           { dir: 'down', items: downClues },
         ].map(({ dir, items }) => {
-          const activeNum = getActiveClueNum(dir)
+          const activeNum = nav.getActiveClueNum(dir)
           return (
             <div key={dir} className="min-w-0">
               <h2
@@ -348,11 +134,11 @@ export default function Solve({ puzzle }) {
               >
                 {dir}
               </h2>
-              {items.map((clue) => (
+              {items.map(clue => (
                 <div
                   key={clue.num}
                   className={`clue-row flex gap-2 items-baseline cursor-pointer${
-                    direction === dir && activeNum === clue.num ? ' clue-active' : ''
+                    nav.direction === dir && activeNum === clue.num ? ' clue-active' : ''
                   }`}
                   onClick={() => handleClueClick(dir, clue.num)}
                 >
@@ -375,7 +161,7 @@ export default function Solve({ puzzle }) {
 
       <div className="w-full max-w-[380px] flex flex-col gap-1.5">
         <button
-          onClick={() => setRevealed((r) => !r)}
+          onClick={() => setRevealed(r => !r)}
           className="btn-accent w-full py-3.5 rounded-xl text-[15px] font-semibold"
           style={{ background: 'var(--accent)', color: 'var(--accent-fg)' }}
         >
@@ -396,6 +182,6 @@ export default function Solve({ puzzle }) {
           create your own
         </a>
       </div>
-    </div>
+    </Layout>
   )
 }
