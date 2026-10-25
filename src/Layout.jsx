@@ -15,7 +15,7 @@ export default function Layout({ children, onKeyDown, inputRef }) {
         ref={inputRef}
         inputMode="none"
         autoComplete="off"
-        style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+        style={{ position: 'fixed', top: '-100px', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
         aria-hidden="true"
       />
       <h1

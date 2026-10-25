@@ -49,9 +49,7 @@ export function encodePuzzle(grid, acrossStarts, downStarts, clues) {
   return toBase64Url(g + '\n' + a.join('\n') + '\n\n' + d.join('\n'))
 }
 
-export function decodePuzzle(hash) {
-  const raw = fromBase64Url(hash)
-
+function parseRaw(raw) {
   let gridStr, acrossTexts, downTexts
   if (raw[0] === '[') {
     ;[gridStr, acrossTexts, downTexts] = JSON.parse(raw)
@@ -95,4 +93,8 @@ export function decodePuzzle(hash) {
   }))
 
   return { grid, numbers, acrossStarts, downStarts, acrossClues, downClues }
+}
+
+export function decodePuzzle(hash) {
+  return parseRaw(fromBase64Url(hash))
 }

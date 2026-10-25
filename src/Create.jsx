@@ -5,6 +5,7 @@ import Layout from './Layout'
 import useCrosswordNav from './useCrosswordNav'
 import { encodePuzzle, numberGrid } from './encoding'
 import { QRCodeSVG } from 'qrcode.react'
+import { addCreated, getHistory } from './history'
 
 function emptyGrid() {
   return Array.from({ length: 5 }, () =>
@@ -28,13 +29,60 @@ function saveDraft(data) {
   try { localStorage.setItem(DRAFT_KEY, JSON.stringify(data)) } catch {}
 }
 
+function History() {
+  const entries = getHistory()
+  if (entries.length === 0) return null
+  const base = location.origin + location.pathname
+  return (
+    <div className="w-full max-w-[380px] mt-8 min-w-0">
+      <h2
+        className="text-[11px] font-medium uppercase mb-3"
+        style={{ letterSpacing: '0.12em', color: 'var(--dim)' }}
+      >
+        my puzzles
+      </h2>
+      <div className="flex flex-col gap-1">
+        {entries.map(e => (
+          <a
+            key={e.hash + e.type}
+            href={`${base}#${e.hash}`}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg no-underline"
+            style={{ background: 'var(--surface)', color: 'var(--fg)' }}
+          >
+            <span
+              className="text-[10px] font-medium uppercase shrink-0"
+              style={{
+                color: e.type === 'solved' ? 'var(--correct)' : 'var(--accent)',
+                letterSpacing: '0.05em',
+              }}
+            >
+              {e.type === 'solved' ? 'solved' : 'created'}
+            </span>
+            <span className="text-sm truncate min-w-0">{e.label}</span>
+            <span
+              className="text-[11px] ml-auto shrink-0"
+              style={{ color: 'var(--dim)' }}
+            >
+              {new Date(e.ts).toLocaleDateString()}
+            </span>
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Create() {
   const draftRef = useRef(undefined)
   if (draftRef.current === undefined) draftRef.current = loadDraft()
   const draft = draftRef.current
 
   const [grid, setGrid] = useState(() => draft?.grid ?? emptyGrid())
-  const [mode, setMode] = useState(() => draft?.mode ?? 'blocks')
+  const [mode, setMode] = useState(() => {
+    const m = draft?.mode
+    if (m === 'blocks' || m === 'letters') return 'board'
+    return m ?? 'board'
+  })
   const [clues, setClues] = useState(() => draft?.clues ?? { across: {}, down: {} })
   const [shareUrl, setShareUrl] = useState(null)
   const [copied, setCopied] = useState(false)
@@ -54,7 +102,7 @@ export default function Create() {
     setEditGrid: setGrid,
     acrossStarts,
     downStarts,
-    disabled: mode !== 'letters',
+    disabled: mode !== 'board',
     inputRef,
     initialSelected: () => {
       const sel = draft?.selected
@@ -64,22 +112,21 @@ export default function Create() {
     initialDirection: () => draft?.direction ?? 'across',
   })
 
-  function handleCellClick(r, c) {
-    if (mode === 'blocks') {
-      setGrid(prev =>
-        prev.map((row, ri) =>
-          ri !== r ? row : row.map((cell, ci) =>
-            ci !== c ? cell : { black: !cell.black, letter: '' }
-          )
+  function handleLongPress(r, c) {
+    setGrid(prev =>
+      prev.map((row, ri) =>
+        ri !== r ? row : row.map((cell, ci) =>
+          ci !== c ? cell : { black: !cell.black, letter: '' }
         )
       )
-      return
+    )
+    if (nav.selected && nav.selected[0] === r && nav.selected[1] === c) {
+      nav.setSelected(null)
     }
-    nav.handleCellClick(r, c)
   }
 
   function handleClueClick(dir, num) {
-    setMode('letters')
+    setMode('board')
     const starts = dir === 'across' ? acrossStarts : downStarts
     const s = starts.find(x => x.num === num)
     if (s) {
@@ -88,8 +135,8 @@ export default function Create() {
     }
   }
 
-  function switchToLetters() {
-    setMode('letters')
+  function switchToBoard() {
+    setMode('board')
     if (!nav.selected) {
       for (let r = 0; r < 5; r++)
         for (let c = 0; c < 5; c++)
@@ -119,6 +166,8 @@ export default function Create() {
       return
     }
     const encoded = encodePuzzle(grid, acrossStarts, downStarts, clues)
+    const firstClue = acrossStarts[0] ? clues.across[acrossStarts[0].num]?.trim() : ''
+    addCreated(encoded, firstClue || 'untitled')
     setShareUrl(`${location.origin}${location.pathname}#${encoded}`)
   }
 
@@ -174,116 +223,127 @@ export default function Create() {
           className="mode-btn px-4 py-1.5 rounded-md text-xs font-medium uppercase"
           style={{
             letterSpacing: '0.1em',
-            background: mode === 'blocks' ? 'var(--cell)' : 'transparent',
-            color: mode === 'blocks' ? 'var(--fg)' : 'var(--dim)',
+            background: mode === 'board' ? 'var(--cell)' : 'transparent',
+            color: mode === 'board' ? 'var(--fg)' : 'var(--dim)',
           }}
-          onClick={() => {
-            setMode('blocks')
-            nav.setSelected(null)
-          }}
+          onClick={switchToBoard}
         >
-          blocks
+          board
         </button>
         <button
           className="mode-btn px-4 py-1.5 rounded-md text-xs font-medium uppercase"
           style={{
             letterSpacing: '0.1em',
-            background: mode === 'letters' ? 'var(--cell)' : 'transparent',
-            color: mode === 'letters' ? 'var(--fg)' : 'var(--dim)',
+            background: mode === 'clues' ? 'var(--cell)' : 'transparent',
+            color: mode === 'clues' ? 'var(--fg)' : 'var(--dim)',
           }}
-          onClick={switchToLetters}
+          onClick={() => setMode('clues')}
         >
-          letters
+          clues
         </button>
       </div>
 
-      <div className="relative mb-7">
-        <Grid
-          grid={grid}
-          numbers={numbers}
-          selected={mode === 'letters' ? nav.selected : null}
-          highlightedCells={nav.highlightedCells}
-          onCellClick={handleCellClick}
-        />
-      </div>
+      {mode === 'board' && (
+        <>
+          <div className="relative mb-7">
+            <Grid
+              grid={grid}
+              numbers={numbers}
+              selected={nav.selected}
+              highlightedCells={nav.highlightedCells}
+              onCellClick={nav.handleCellClick}
+              onLongPress={handleLongPress}
+            />
+          </div>
 
-      {mode === 'letters' && nav.selected && (
-        <div className="mb-5">
-          <Keyboard onKey={nav.typeLetter} onBackspace={nav.doBackspace} />
+          {nav.selected && (
+            <div className="mb-5">
+              <Keyboard onKey={nav.typeLetter} onBackspace={nav.doBackspace} />
+            </div>
+          )}
+
+          {!grid.some(row => row.some(cell => cell.black || cell.letter)) && (
+            <p className="text-xs font-light mb-5" style={{ color: 'var(--dim)' }}>
+              hold a cell to place a block
+            </p>
+          )}
+        </>
+      )}
+
+      {mode === 'clues' && (
+        <div className="w-full max-w-[380px] grid grid-cols-2 gap-3 mb-5 min-w-0">
+          {['across', 'down'].map(dir => {
+            const starts = dir === 'across' ? acrossStarts : downStarts
+            const activeNum = nav.getActiveClueNum(dir)
+            return (
+              <div key={dir} className="min-w-0">
+                <h2
+                  className="text-[11px] font-medium uppercase mb-2.5"
+                  style={{ letterSpacing: '0.12em', color: 'var(--dim)' }}
+                >
+                  {dir}
+                </h2>
+                {starts.length === 0 ? (
+                  <p
+                    className="text-sm font-light"
+                    style={{ color: 'var(--dim)' }}
+                  >
+                    place blocks to create words
+                  </p>
+                ) : (
+                  starts.map(s => (
+                    <div
+                      key={s.num}
+                      className={`clue-row flex gap-2 items-start cursor-pointer${
+                        nav.direction === dir && activeNum === s.num ? ' clue-active' : ''
+                      }`}
+                      onClick={() => handleClueClick(dir, s.num)}
+                    >
+                      <span
+                        className="text-sm font-semibold min-w-[16px]"
+                        style={{
+                          color: 'var(--accent)',
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                      >
+                        {s.num}
+                      </span>
+                      <textarea
+                        rows={1}
+                        placeholder="add clue…"
+                        value={clues[dir][s.num] || ''}
+                        onChange={e => {
+                          setClues(prev => ({
+                            ...prev,
+                            [dir]: { ...prev[dir], [s.num]: e.target.value },
+                          }))
+                          e.target.style.height = 'auto'
+                          e.target.style.height = e.target.scrollHeight + 'px'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                        className="clue-input flex-1 bg-transparent text-sm outline-none min-w-0 resize-none leading-snug"
+                        style={{ color: 'var(--fg)', overflow: 'hidden' }}
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
-      {!grid.some(row => row.some(cell => cell.black || cell.letter)) && mode === 'blocks' && (
-        <p className="text-xs font-light mb-5" style={{ color: 'var(--dim)' }}>
-          tap cells to place blocks
-        </p>
+      {mode === 'clues' && (
+        <div className="mb-7" style={{ transform: 'scale(0.55)', transformOrigin: 'top center' }}>
+          <Grid
+            grid={grid}
+            numbers={numbers}
+            selected={null}
+            highlightedCells={[]}
+            onCellClick={() => setMode('board')}
+          />
+        </div>
       )}
-
-      <div className="w-full max-w-[380px] grid grid-cols-2 gap-3 mb-7 min-w-0">
-        {['across', 'down'].map(dir => {
-          const starts = dir === 'across' ? acrossStarts : downStarts
-          const activeNum = nav.getActiveClueNum(dir)
-          return (
-            <div key={dir} className="min-w-0">
-              <h2
-                className="text-[11px] font-medium uppercase mb-2.5"
-                style={{ letterSpacing: '0.12em', color: 'var(--dim)' }}
-              >
-                {dir}
-              </h2>
-              {starts.length === 0 ? (
-                <p
-                  className="text-sm font-light"
-                  style={{ color: 'var(--dim)' }}
-                >
-                  place blocks to create words
-                </p>
-              ) : (
-                starts.map(s => (
-                  <div
-                    key={s.num}
-                    className={`clue-row flex gap-2 items-start cursor-pointer${
-                      nav.direction === dir && activeNum === s.num ? ' clue-active' : ''
-                    }`}
-                    onClick={() => handleClueClick(dir, s.num)}
-                  >
-                    <span
-                      className="text-sm font-semibold min-w-[16px]"
-                      style={{
-                        color: 'var(--accent)',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {s.num}
-                    </span>
-                    <textarea
-                      rows={1}
-                      placeholder="add clue…"
-                      value={clues[dir][s.num] || ''}
-                      onChange={e => {
-                        setClues(prev => ({
-                          ...prev,
-                          [dir]: { ...prev[dir], [s.num]: e.target.value },
-                        }))
-                        e.target.style.height = 'auto'
-                        e.target.style.height = e.target.scrollHeight + 'px'
-                      }}
-                      onClick={e => {
-                        e.stopPropagation()
-                        nav.setSelected([s.row, s.col])
-                        nav.setDirection(dir)
-                        if (mode !== 'letters') setMode('letters')
-                      }}
-                      className="clue-input flex-1 bg-transparent text-sm outline-none min-w-0 resize-none leading-snug"
-                      style={{ color: 'var(--fg)', overflow: 'hidden' }}
-                    />
-                  </div>
-                ))
-              )}
-            </div>
-          )
-        })}
-      </div>
 
       <div className="w-full max-w-[380px] flex flex-col gap-1.5">
         <button
@@ -310,6 +370,8 @@ export default function Create() {
           {confirmClear ? 'tap again to clear' : 'clear grid'}
         </button>
       </div>
+
+      <History />
 
       {shareUrl && (
         <div

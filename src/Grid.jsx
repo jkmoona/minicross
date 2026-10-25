@@ -1,11 +1,51 @@
+import { useRef, useCallback } from 'react'
+
 export default function Grid({
   grid,
   numbers,
   selected,
   highlightedCells,
   onCellClick,
+  onLongPress,
   showCursor = true,
 }) {
+  const timerRef = useRef(null)
+  const firedRef = useRef(false)
+  const startPos = useRef(null)
+
+  const handlePointerDown = useCallback((r, c, e) => {
+    if (!onLongPress) return
+    firedRef.current = false
+    startPos.current = { x: e.clientX, y: e.clientY }
+    timerRef.current = setTimeout(() => {
+      firedRef.current = true
+      onLongPress(r, c)
+    }, 400)
+  }, [onLongPress])
+
+  const handlePointerMove = useCallback((e) => {
+    if (!timerRef.current || !startPos.current) return
+    const dx = e.clientX - startPos.current.x
+    const dy = e.clientY - startPos.current.y
+    if (dx * dx + dy * dy > 100) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  const handlePointerUp = useCallback(() => {
+    clearTimeout(timerRef.current)
+    timerRef.current = null
+  }, [])
+
+  function handleClick(r, c) {
+    if (firedRef.current) {
+      firedRef.current = false
+      return
+    }
+    onCellClick(r, c)
+  }
+
   return (
     <div
       className="inline-grid overflow-hidden"
@@ -47,7 +87,12 @@ export default function Grid({
                 fontWeight: 600,
                 letterSpacing: '0.01em',
               }}
-              onClick={() => onCellClick(r, c)}
+              onClick={() => handleClick(r, c)}
+              onPointerDown={onLongPress ? (e) => handlePointerDown(r, c, e) : undefined}
+              onPointerMove={onLongPress ? handlePointerMove : undefined}
+              onPointerUp={onLongPress ? handlePointerUp : undefined}
+              onPointerCancel={onLongPress ? handlePointerUp : undefined}
+              onContextMenu={onLongPress ? (e) => e.preventDefault() : undefined}
             >
               {!cell.black && num > 0 && (
                 <span

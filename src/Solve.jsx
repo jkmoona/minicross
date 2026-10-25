@@ -3,6 +3,7 @@ import Grid from './Grid'
 import Keyboard from './Keyboard'
 import Layout from './Layout'
 import useCrosswordNav from './useCrosswordNav'
+import { addSolved } from './history'
 
 export default function Solve({ puzzle }) {
   const { grid: solution, numbers, acrossClues, downClues, acrossStarts, downStarts } =
@@ -47,7 +48,7 @@ export default function Solve({ puzzle }) {
     setEditGrid: setUserGrid,
     acrossStarts,
     downStarts,
-    disabled: revealed,
+    disabled: revealed || solved,
     inputRef,
     initialSelected: () => {
       for (let r = 0; r < 5; r++)
@@ -91,6 +92,13 @@ export default function Solve({ puzzle }) {
   useEffect(() => {
     try { localStorage.setItem(solveKey, JSON.stringify(userGrid)) } catch {}
   }, [userGrid, solveKey])
+
+  useEffect(() => {
+    if (solved) {
+      const firstClue = acrossClues[0]?.text || 'untitled'
+      addSolved(location.hash.slice(1), firstClue)
+    }
+  }, [solved, acrossClues])
 
   return (
     <Layout onKeyDown={nav.handleKeyDown} inputRef={inputRef}>

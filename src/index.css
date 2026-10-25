@@ -102,6 +102,9 @@ textarea.clue-input::-webkit-scrollbar {
 .grid-cell {
   transition: background-color 0.1s ease, filter 0.1s ease;
   touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .grid-cell:hover {
   filter: brightness(1.1);
