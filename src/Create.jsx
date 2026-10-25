@@ -213,13 +213,13 @@ export default function Create() {
         </div>
       )}
 
-      {!grid.some(row => row.some(cell => cell.black || cell.letter)) && (
+      {!grid.some(row => row.some(cell => cell.black || cell.letter)) && mode === 'blocks' && (
         <p className="text-xs font-light mb-5" style={{ color: 'var(--dim)' }}>
-          {mode === 'blocks' ? 'tap cells to place blocks' : 'tap a cell and type'}
+          tap cells to place blocks
         </p>
       )}
 
-      <div className="w-full max-w-[380px] grid grid-cols-2 gap-6 mb-7 min-w-0">
+      <div className="w-full max-w-[380px] grid grid-cols-2 gap-3 mb-7 min-w-0">
         {['across', 'down'].map(dir => {
           const starts = dir === 'across' ? acrossStarts : downStarts
           const activeNum = nav.getActiveClueNum(dir)
@@ -327,7 +327,7 @@ export default function Create() {
           >
             <h2 className="text-lg font-semibold">puzzle ready</h2>
             <div className="p-4 rounded-xl" style={{ background: '#fff' }}>
-              <QRCodeSVG value={shareUrl} size={200} />
+              <QRCodeSVG value={shareUrl} size={200} level="M" />
             </div>
             <input
               readOnly

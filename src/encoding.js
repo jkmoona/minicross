@@ -46,12 +46,22 @@ export function encodePuzzle(grid, acrossStarts, downStarts, clues) {
     .join('')
   const a = acrossStarts.map((s) => clues.across[s.num] || '')
   const d = downStarts.map((s) => clues.down[s.num] || '')
-  return toBase64Url(JSON.stringify([g, a, d]))
+  return toBase64Url(g + '\n' + a.join('\n') + '\n\n' + d.join('\n'))
 }
 
 export function decodePuzzle(hash) {
   const raw = fromBase64Url(hash)
-  const [gridStr, acrossTexts, downTexts] = JSON.parse(raw)
+
+  let gridStr, acrossTexts, downTexts
+  if (raw[0] === '[') {
+    ;[gridStr, acrossTexts, downTexts] = JSON.parse(raw)
+  } else {
+    const [acrossPart, downPart] = raw.slice(26).split('\n\n', 2)
+    gridStr = raw.slice(0, 25)
+    acrossTexts = acrossPart ? acrossPart.split('\n') : []
+    downTexts = downPart ? downPart.split('\n') : []
+  }
+
   if (typeof gridStr !== 'string' || gridStr.length !== 25 || !/^[A-Z._]{25}$/.test(gridStr)) {
     throw new Error('invalid puzzle data')
   }

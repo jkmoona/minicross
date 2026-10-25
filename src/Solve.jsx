@@ -120,7 +120,7 @@ export default function Solve({ puzzle }) {
         </div>
       )}
 
-      <div className="w-full max-w-[380px] grid grid-cols-2 gap-6 mb-7 min-w-0">
+      <div className="w-full max-w-[380px] grid grid-cols-2 gap-3 mb-7 min-w-0">
         {[
           { dir: 'across', items: acrossClues },
           { dir: 'down', items: downClues },
