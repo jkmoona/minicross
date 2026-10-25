@@ -1,15 +1,26 @@
-function toBase64Url(str) {
-  const bytes = new TextEncoder().encode(str)
+function bytesToBase64Url(bytes) {
   let bin = ''
   for (const b of bytes) bin += String.fromCharCode(b)
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-function fromBase64Url(b64) {
+function base64UrlToBytes(b64) {
   const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'))
   const bytes = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  return new TextDecoder().decode(bytes)
+  return bytes
+}
+
+async function compress(text) {
+  const stream = new Blob([text]).stream()
+    .pipeThrough(new CompressionStream('deflate-raw'))
+  return new Uint8Array(await new Response(stream).arrayBuffer())
+}
+
+async function decompress(bytes) {
+  const stream = new Blob([bytes]).stream()
+    .pipeThrough(new DecompressionStream('deflate-raw'))
+  return new Response(stream).text()
 }
 
 export function numberGrid(grid) {
@@ -39,14 +50,26 @@ export function numberGrid(grid) {
   return { numbers, acrossStarts, downStarts }
 }
 
-export function encodePuzzle(grid, acrossStarts, downStarts, clues) {
+export async function encodePuzzle(grid, acrossStarts, downStarts, clues) {
   const g = grid
     .flat()
     .map((c) => (c.black ? '.' : c.letter || '_'))
     .join('')
   const a = acrossStarts.map((s) => clues.across[s.num] || '')
   const d = downStarts.map((s) => clues.down[s.num] || '')
-  return toBase64Url(g + '\n' + a.join('\n') + '\n\n' + d.join('\n'))
+  const text = g + '\n' + a.join('\n') + '\n\n' + d.join('\n')
+  const plain = bytesToBase64Url(new TextEncoder().encode(text))
+
+  try {
+    const compressed = await compress(text)
+    const payload = new Uint8Array(1 + compressed.length)
+    payload[0] = 1
+    payload.set(compressed, 1)
+    const short = bytesToBase64Url(payload)
+    return short.length < plain.length ? short : plain
+  } catch {
+    return plain
+  }
 }
 
 function parseRaw(raw) {
@@ -95,6 +118,16 @@ function parseRaw(raw) {
   return { grid, numbers, acrossStarts, downStarts, acrossClues, downClues }
 }
 
-export function decodePuzzle(hash) {
-  return parseRaw(fromBase64Url(hash))
+export async function decodePuzzle(hash) {
+  const bytes = base64UrlToBytes(hash)
+
+  if (bytes[0] === 1) {
+    if (typeof DecompressionStream === 'undefined') {
+      throw new Error('browser-outdated')
+    }
+    const raw = await decompress(bytes.slice(1))
+    return parseRaw(raw)
+  }
+
+  return parseRaw(new TextDecoder().decode(bytes))
 }

@@ -40,11 +40,13 @@ export default function App() {
     function check() {
       const hash = location.hash.slice(1)
       if (hash) {
-        try {
-          setRoute({ mode: 'solve', puzzle: decodePuzzle(hash) })
-        } catch {
-          setRoute({ mode: 'invalid' })
-        }
+        decodePuzzle(hash).then(
+          puzzle => setRoute({ mode: 'solve', puzzle }),
+          err => setRoute({
+            mode: 'invalid',
+            outdated: err?.message === 'browser-outdated',
+          })
+        )
       } else {
         setRoute({ mode: 'create' })
       }
@@ -71,7 +73,9 @@ export default function App() {
             minicross
           </h1>
           <p className="text-sm" style={{ color: 'var(--dim)' }}>
-            this puzzle link is invalid or expired
+            {route.outdated
+              ? 'please update your browser to open this puzzle'
+              : 'this puzzle link is invalid or expired'}
           </p>
           <a
             href="/"

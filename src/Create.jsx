@@ -144,7 +144,7 @@ export default function Create() {
     }
   }
 
-  function handleShare() {
+  async function handleShare() {
     setError('')
     if (acrossStarts.length === 0 && downStarts.length === 0) {
       setError('place blocks to create words')
@@ -165,7 +165,7 @@ export default function Create() {
       setErrorKey(k => k + 1)
       return
     }
-    const encoded = encodePuzzle(grid, acrossStarts, downStarts, clues)
+    const encoded = await encodePuzzle(grid, acrossStarts, downStarts, clues)
     const firstClue = acrossStarts[0] ? clues.across[acrossStarts[0].num]?.trim() : ''
     addCreated(encoded, firstClue || 'untitled')
     setShareUrl(`${location.origin}${location.pathname}#${encoded}`)
